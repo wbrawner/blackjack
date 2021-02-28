@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en_US">
+<head>
+    <title>BlackJack</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <link rel="stylesheet" href="css/style.css"/>
+    <script type="text/javascript" src="js/app.js"></script>
+</head>
+<body onload="processData()">
+<div class="content">
+    <div id="connecting">
+        <h1 class="title">Waiting for host</h1>
+        <div class="lds-ellipsis">
+            <div></div>
+            <div></div>
+            <div></div>
+            <div></div>
+        </div>
+    </div>
+    <div id="host" style="display: none;">
+        <p id="copy-info" style="transition: all 0.25s ease;">Click the code below to copy a link you can share with
+            your friends</p>
+        <h1 id="code" onclick="copyCode()" style="cursor: pointer;"></h1>
+        <button id="start" class="button" disabled="disabled" onclick="startGame()">Start Game</button>
+    </div>
+    <ul id="players"></ul>
+    <div id="game" style="display: none;">
+        <p>Game here</p>
+        <div class="actions">
+            <button id="hit" class="button" onclick="hit()">Hit</button>
+            <button id="stand" class="button" onclick="stand()">Stand</button>
+        </div>
+    </div>
+</div>
+<script type="text/javascript">
+    let ws;
+    let player;
+    let code;
+
+    function processData() {
+        let params = new URLSearchParams(window.location.search);
+        if (!params.has('code')) {
+            console.log('Redirecting');
+            window.location.href = './';
+            return;
+        }
+        code = params.get('code');
+        playerJSON = window.localStorage.getItem(code);
+        if (!playerJSON || !(player = JSON.parse(playerJSON))) {
+            console.log("Invalid player");
+            window.location.href = `./join?code=${code}`;
+            return;
+        }
+        connectToGame();
+    }
+
+    function connectToGame() {
+        const scheme = window.location.protocol === 'http:' ? 'ws' : 'wss';
+        ws = new WebSocket(`${scheme}://${window.location.host}/${window.location.pathname}s/${code}/${player.secret}`);
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            console.log(data);
+            switch (data.type) {
+                case 'game':
+                    handleGame(data);
+                    break;
+                case 'player':
+                    handlePlayer(data);
+                    break;
+                case 'error':
+                    handleError(data);
+                    break;
+                default:
+                    console.error('Unknown data type', data)
+            }
+        }
+    }
+
+    function handleGame(game) {
+        if (!game.started) {
+            if (game.host === player.name) {
+                // We're the host!
+                document.getElementById('connecting').style.display = 'none';
+                document.getElementById('code').innerText = code;
+                document.getElementById('host').style.display = 'block';
+                if (game.players.length > 1) document.getElementById('start').removeAttribute('disabled');
+            }
+            const players = document.getElementById('players');
+            players.innerHTML = '';
+            game.players.forEach(p => {
+                const li = document.createElement('li');
+                let text = p.name;
+                if (p.name === player.name && p.name === game.host) {
+                    text += ' (Host, You)';
+                } else if (p.name === game.host) {
+                    text += ' (Host)';
+                } else if (p.name === player.name) {
+                    text += ' (You)';
+                }
+                li.innerText = text;
+                players.appendChild(li);
+            });
+        } else {
+            document.getElementById('connecting').style.display = 'none';
+            document.getElementById('host').style.display = 'none';
+            document.getElementById('players').style.display = 'none';
+            document.getElementById('game').style.display = 'block';
+        }
+    }
+
+    function handleError(error) {
+        console.error(error);
+        window.location.href = './';
+    }
+
+    function handlePlayer(player) {
+        // TODO: Show cards in hand
+        console.log(player);
+    }
+
+    function startGame() {
+        if (document.getElementById('players').childElementCount < 2) return;
+        ws.send(JSON.stringify({
+            type: 'startGame',
+            player: player.secret
+        }));
+    }
+
+    function copyCode() {
+        navigator.permissions.query({name: "clipboard-write"}).then(result => {
+            if (result.state === "granted" || result.state === "prompt") {
+                let code = document.getElementById('code').innerText;
+                let url = new URL(window.location.href);
+                url.searchParams.delete('host');
+                url.searchParams.set('code', code);
+                url.pathname = url.pathname.replace('host', 'join');
+                navigator.clipboard.writeText(url.toString());
+                setCopyInfoText('Copied!');
+                setTimeout(() => setCopyInfoText('Click the code below to copy a link you can share with your friends'), 2250);
+            }
+        });
+    }
+
+    function setCopyInfoText(text) {
+        let info = document.getElementById('copy-info');
+        if (info.innerText === text) return;
+        info.style.opacity = '0';
+        setTimeout(() => {
+            info.innerText = text;
+            info.style.opacity = '1';
+        }, 250);
+    }
+</script>
+</body>
+</html>

@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en_US">
+<head>
+    <title>BlackJack - Host</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <link rel="stylesheet" href="css/style.css"/>
+    <script type="text/javascript" src="js/app.js"></script>
+</head>
+<body onload="processData()">
+<div class="content">
+    <div id="prompt">
+        <h1 class="title">Host Game</h1>
+        <p>Enter your name below</p>
+        <form action="/host" id="join-form">
+            <label for="host">Name</label>
+            <p id="error" class="error" style="display: none;">Invalid name. Please try again.</p>
+            <input id="host" name="host" type="text" minlength="1" maxlength="256" pattern="\w+" spellcheck="false"
+                   placeholder="Name"/>
+            <input class="button" type="submit" value="Submit"/>
+        </form>
+    </div>
+    <div id="creating" style="display: none;">
+        <h1 class="title">Creating Game</h1>
+        <div class="lds-ellipsis">
+            <div></div>
+            <div></div>
+            <div></div>
+            <div></div>
+        </div>
+    </div>
+</div>
+<script type="text/javascript">
+    function processData() {
+        let params = new URLSearchParams(window.location.search);
+        if (params.has('host')) {
+            createGame(params.get('host'))
+        }
+    }
+
+    function createGame(name) {
+        document.getElementById('prompt').style.display = 'none';
+        const creating = document.getElementById('creating');
+        console.log(`Creating game. Host: ${name}`);
+        creating.style.display = 'block';
+        fetch(
+            `./api/new-game`,
+            {
+                method: 'POST',
+                body: JSON.stringify({name: name}),
+                headers: {
+                    'content-type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(response => {
+                console.log(`Created game`, response);
+                window.localStorage.setItem(
+                    response.gameId,
+                    JSON.stringify({
+                        name: name,
+                        secret: response.playerSecret
+                    })
+                );
+                let gameUrl = new URL(window.location.href);
+                gameUrl.pathname = gameUrl.pathname.replace('host', 'game');
+                gameUrl.search = `code=${response.gameId}`;
+                window.location.replace(gameUrl.toString());
+            })
+            .catch(err => console.error(`Failed to create game`, err))
+    }
+</script>
+</body>
+</html>
